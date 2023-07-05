@@ -124,6 +124,17 @@ class EncoderDecoder(BaseSegmentor):
 
         return losses
 
+    def extract_auxiliary_feat(self, img):
+        """Extract auxiliary features from images."""
+        x = self.extract_feat(img)
+        out = self._auxiliary_head_forward_test(x)
+        return out
+
+    def auxiliary_project_feat(self, x):
+        """Extract auxiliary features from images."""
+        out = self._auxiliary_head_forward_test(x)
+        return out
+
     def _auxiliary_head_forward_test(self, x):
         """Run forward function and return feature"""
         out = self.auxiliary_head(x)

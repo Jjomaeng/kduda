@@ -348,24 +348,25 @@ class DACS(UDADecorator):
     #    src_kl_feat = augment_kl_loss.pop('features') #encoder_decoder.py -> extract_feat(target_img)
         target_kl_feat = self.get_model().encode_decode( aug_target_img, target_img_metas)
     #    student_src_feat = self.get_model().extract_feat(img)##output space
-        student_trg_feat = self.get_model().extract_feat(target_img)# for cl loss
+        student_trg_feat = self.get_model().extract_auxiliary_feat(target_img)# for cl loss
 
 
         with torch.no_grad(): #teacher
             tea_target_feat = self.get_teacher_model().encode_decode(ori_target_img, target_img_metas)
-            tea_trg_feat = self.get_teacher_model().extract_feat(target_img)
+            x = self.get_teacher_model().extract_feat(target_img)
+            tea_trg_feat = self.get_model().auxiliary_project_feat(x) #for cl loss
         #     tea_src_feat = self.get_teacher_model().encode_decode(img, img_metas) #output space
         #     tea_feat = self.get_teacher_model().extract_feat(target_img) #feature space
 
         #bank update : original target image - teacher network output
         pseudo_label_cl = pseudo_label.view(2,1,512,512) # variable change !!
-        feat, mask = contrast_preparations(tea_trg_feat[3],pseudo_label_cl,True,0.75,19,255)
+        feat, mask = contrast_preparations(tea_trg_feat,pseudo_label_cl,True,0.75,19,255)
         self.feat_distributions.update_proto(features=feat.detach(), labels=mask)
         bank = self.feat_distributions.MemoryBank
 
         #contrastive loss
         if self.local_iter >= self.start_distribution_iter:
-            cl_loss = bank_contrastive(student_trg_feat[3],pseudo_label_cl,bank)
+            cl_loss = bank_contrastive(student_trg_feat,pseudo_label_cl,bank)
             cl_loss, _ = self._parse_losses({'contrastive loss': cl_loss})
             cl_loss.backward()
 
