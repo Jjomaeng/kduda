@@ -85,7 +85,7 @@ class DACS(UDADecorator):
         # feature storage for contrastive
         self.feat_distributions = None
         self.ignore_index = 255
-        self.start_distribution_iter = 4000
+        self.start_distribution_iter = 50
 
         #mit-b3 student model generate
         #std_cfg = deepcopy(cfg['model'])
@@ -272,7 +272,6 @@ class DACS(UDADecorator):
                 mmcv.print_log(f'Fdist Grad.: {grad_mag}', 'mmseg')
 
         # Generate pseudo-label
-
         for m in self.get_teacher_model().modules():
 
             if isinstance(m, _DropoutNd):
@@ -348,13 +347,13 @@ class DACS(UDADecorator):
     #    src_kl_feat = augment_kl_loss.pop('features') #encoder_decoder.py -> extract_feat(target_img)
         target_kl_feat = self.get_model().encode_decode( aug_target_img, target_img_metas)
     #    student_src_feat = self.get_model().extract_feat(img)##output space
-        student_trg_feat = self.get_model().extract_auxiliary_feat(target_img)# for cl loss
+        student_trg_feat = self.get_model().extract_decode_context(target_img,target_img_metas,return_context = True)# for cl loss
 
 
         with torch.no_grad(): #teacher
             tea_target_feat = self.get_teacher_model().encode_decode(ori_target_img, target_img_metas)
-            x = self.get_teacher_model().extract_feat(target_img)
-            tea_trg_feat = self.get_model().auxiliary_project_feat(x) #for cl loss
+            tea_trg_feat = self.get_teacher_model().extract_decode_context(target_img,target_img_metas,return_context = True)
+        #    tea_trg_feat = self.get_model().auxiliary_project_feat(x) #for cl loss
         #     tea_src_feat = self.get_teacher_model().encode_decode(img, img_metas) #output space
         #     tea_feat = self.get_teacher_model().extract_feat(target_img) #feature space
 

@@ -174,7 +174,8 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
                       img_metas,
                       gt_semantic_seg,
                       train_cfg,
-                      seg_weight=None):
+                      seg_weight=None,
+                      return_context = False):
         """Forward function for training.
         Args:
             inputs (list[Tensor]): List of multi-level img features.
@@ -190,11 +191,15 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
         Returns:
             dict[str, Tensor]: a dictionary of loss components
         """
-        seg_logits = self.forward(inputs)
-        losses = self.losses(seg_logits, gt_semantic_seg, seg_weight)
-        return losses
+        if return_context:
+            context = self.forward(inputs,return_context)
+            return context
+        else :
+            seg_logits = self.forward(inputs)
+            losses = self.losses(seg_logits, gt_semantic_seg, seg_weight)
+            return losses
 
-    def forward_test(self, inputs, img_metas, test_cfg):
+    def forward_test(self, inputs, img_metas, test_cfg,return_context = False):
         """Forward function for testing.
 
         Args:
@@ -209,7 +214,7 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
         Returns:
             Tensor: Output segmentation map.
         """
-        return self.forward(inputs)
+        return self.forward(inputs,return_context)
 
     def cls_seg(self, feat):
         """Classify each pixel."""

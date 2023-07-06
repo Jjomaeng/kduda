@@ -155,7 +155,7 @@ class DAFormerHead(BaseDecodeHead):
         self.fuse_layer = build_layer(
             sum(embed_dims), self.channels, **fusion_cfg)
 
-    def forward(self, inputs):
+    def forward(self, inputs, return_context = False):
         x = inputs
         n, _, h, w = x[-1].shape
         # for f in x:
@@ -178,7 +178,9 @@ class DAFormerHead(BaseDecodeHead):
                     mode='bilinear',
                     align_corners=self.align_corners)
 
-        x = self.fuse_layer(torch.cat(list(_c.values()), dim=1))
-        x = self.cls_seg(x)
+        context = self.fuse_layer(torch.cat(list(_c.values()), dim=1))
+        x = self.cls_seg(context)
+        if return_context:
+            return context
 
         return x
