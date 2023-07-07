@@ -86,6 +86,7 @@ class DACS(UDADecorator):
         self.feat_distributions = None
         self.ignore_index = 255
         self.start_distribution_iter = 50
+        self.print_grad_magnitude = True
 
         #mit-b3 student model generate
         #std_cfg = deepcopy(cfg['model'])
@@ -248,6 +249,7 @@ class DACS(UDADecorator):
         clean_loss, clean_log_vars = self._parse_losses(clean_losses)
         log_vars.update(clean_log_vars)
         clean_loss.backward(retain_graph=self.enable_fdist)
+
         if self.print_grad_magnitude:
             params = self.get_model().backbone.parameters()
             seg_grads = [
@@ -278,8 +280,8 @@ class DACS(UDADecorator):
                 m.training = False
             if isinstance(m, DropPath):
                 m.training = False
-        ema_logits = self.get_teacher_model().encode_decode(
-            target_img, target_img_metas)
+        with torch.no_grad():
+            ema_logits = self.get_teacher_model().encode_decode(target_img, target_img_metas)
 
         ema_softmax = torch.softmax(ema_logits.detach(), dim=1)
         pseudo_prob, pseudo_label = torch.max(ema_softmax, dim=1)
@@ -317,12 +319,13 @@ class DACS(UDADecorator):
 
         # Train on mixed images
         mix_losses = self.get_model().forward_train(
-            mixed_img, img_metas, mixed_lbl, pseudo_weight, return_feat=True)
+            mixed_img, img_metas, mixed_lbl, pseudo_weight, return_feat=True,return_context = True)
         mix_losses.pop('features')
+        student_trg_feat = mix_losses.pop('decode.context')
         mix_losses = add_prefix(mix_losses, 'mix')
         mix_loss, mix_log_vars = self._parse_losses(mix_losses)
         log_vars.update(mix_log_vars)
-        mix_loss.backward()
+        mix_loss.backward(retain_graph=True)
 
         #teacehr - student KL loss
 
@@ -347,13 +350,13 @@ class DACS(UDADecorator):
     #    src_kl_feat = augment_kl_loss.pop('features') #encoder_decoder.py -> extract_feat(target_img)
         target_kl_feat = self.get_model().encode_decode( aug_target_img, target_img_metas)
     #    student_src_feat = self.get_model().extract_feat(img)##output space
-        student_trg_feat = self.get_model().extract_decode_context(target_img,target_img_metas,return_context = True)# for cl loss
 
 
         with torch.no_grad(): #teacher
             tea_target_feat = self.get_teacher_model().encode_decode(ori_target_img, target_img_metas)
-            tea_trg_feat = self.get_teacher_model().extract_decode_context(target_img,target_img_metas,return_context = True)
-        #    tea_trg_feat = self.get_model().auxiliary_project_feat(x) #for cl loss
+        #   tea_trg_feat = self.get_teacher_model().extract_decode_context(target_img,target_img_metas,return_context = True)
+            trg_losses = self.get_teacher_model().forward_train(mixed_img, img_metas, mixed_lbl, pseudo_weight, return_feat=True,return_context = True)#for cl loss
+            tea_trg_feat = trg_losses.pop('decode.context')
         #     tea_src_feat = self.get_teacher_model().encode_decode(img, img_metas) #output space
         #     tea_feat = self.get_teacher_model().extract_feat(target_img) #feature space
 
@@ -367,7 +370,15 @@ class DACS(UDADecorator):
         if self.local_iter >= self.start_distribution_iter:
             cl_loss = bank_contrastive(student_trg_feat,pseudo_label_cl,bank)
             cl_loss, _ = self._parse_losses({'contrastive loss': cl_loss})
-            cl_loss.backward()
+            cl_loss.backward(retain_graph=True )
+
+            if self.print_grad_magnitude:
+                params = self.get_model().backbone.parameters()
+                CL_grads = [
+                    p.grad.detach().clone() for p in params if p.grad is not None
+                ]
+                grad_mag = calc_grad_magnitude(CL_grads)
+                mmcv.print_log(f'CL Loss Grad.: {grad_mag}', 'mmseg')
 
         #target kl loss
         B,C,h,w = tea_target_feat.size()
@@ -380,6 +391,13 @@ class DACS(UDADecorator):
         kl_loss_trg,_ = self._parse_losses({'KL_div_loss_trg': kl_loss_trg})
         kl_loss_trg.backward()
 
+        if self.print_grad_magnitude:
+            params = self.get_model().backbone.parameters()
+            KL_grad = [
+                p.grad.detach().clone() for p in params if p.grad is not None
+            ]
+            grad_mag = calc_grad_magnitude(KL_grad)
+            mmcv.print_log(f'KL Loss Grad.: {grad_mag}', 'mmseg')
         # # source kl loss
         # scale_pred_src = src_kl_feat.permute(0, 2, 3, 1).contiguous().view(-1, C)  # student
         # scale_soft_src = tea_src_feat.permute(0, 2, 3, 1).contiguous().view(-1, C)  # teacher

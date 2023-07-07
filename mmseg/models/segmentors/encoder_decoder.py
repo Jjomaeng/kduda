@@ -85,14 +85,16 @@ class EncoderDecoder(BaseSegmentor):
                                    x,
                                    img_metas,
                                    gt_semantic_seg,
-                                   seg_weight=None):
+                                   seg_weight=None,
+                                   return_context = False):
         """Run forward function and calculate loss for decode head in
         training."""
         losses = dict()
         loss_decode = self.decode_head.forward_train(x, img_metas,
                                                      gt_semantic_seg,
                                                      self.train_cfg,
-                                                     seg_weight)
+                                                     seg_weight,
+                                                     return_context = return_context)
 
         losses.update(add_prefix(loss_decode, 'decode'))
         return losses
@@ -111,7 +113,8 @@ class EncoderDecoder(BaseSegmentor):
                                       x,
                                       img_metas,
                                       gt_semantic_seg,
-                                      seg_weight=None):
+                                      seg_weight=None,
+                                      return_context = False):
         """Run forward function and calculate loss for auxiliary head in
         training."""
         losses = dict()
@@ -127,30 +130,10 @@ class EncoderDecoder(BaseSegmentor):
             losses.update(add_prefix(loss_aux, 'aux'))
 
         return losses
-    def extract_decode_context(self,img,img_metas,return_context):
-        x = self.extract_feat(img)
-        context = self._decode_head_forward_test(x, img_metas,return_context)
-        return context
-    def extract_auxiliary_feat(self, img):
-        """Extract auxiliary features from images."""
-        x = self.extract_feat(img)
-        out = self._auxiliary_head_forward_test(x)
-        return out
 
-    def auxiliary_project_feat(self, x):
-        """Extract auxiliary features from images."""
-        out = self._auxiliary_head_forward_test(x)
-        return out
 
-    def _auxiliary_head_forward_test(self, x):
-        """Run forward function and return feature"""
-        out = self.auxiliary_head(x)
-        return out
-    def extract_auxiliary_feat(self, img):
-        """Extract auxiliary features from images."""
-        x = self.extract_feat(img)
-        out = self._auxiliary_head_forward_test(x)
-        return out
+
+
 
     def forward_dummy(self, img):
         """Dummy forward function."""
@@ -163,7 +146,8 @@ class EncoderDecoder(BaseSegmentor):
                       img_metas,
                       gt_semantic_seg,
                       seg_weight=None,
-                      return_feat=False):
+                      return_feat=False,
+                      return_context = False):
         """Forward function for training.
 
         Args:
@@ -187,7 +171,8 @@ class EncoderDecoder(BaseSegmentor):
 
         loss_decode = self._decode_head_forward_train(x, img_metas,
                                                       gt_semantic_seg,
-                                                      seg_weight)
+                                                      seg_weight,
+                                                      return_context=return_context)
         losses.update(loss_decode)
 
         if self.with_auxiliary_head:

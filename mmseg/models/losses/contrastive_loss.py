@@ -128,7 +128,7 @@ def bank_contrastive(feat,
         pos, neg = [], []
         for idx in range(num_classes):
             idx_bank = list(bank[idx])
-            cls_bank = torch.cat(idx_bank, dim=0)
+            cls_bank = torch.cat(idx_bank[1:], dim=0)
             bank_sim = cls_feat.mm(cls_bank.permute(1, 0).contiguous()) / contrast_temp
             if idx == cls:
                 pos = bank_sim  # NcxMp

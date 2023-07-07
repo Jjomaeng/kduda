@@ -165,7 +165,7 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
 
     @auto_fp16()
     @abstractmethod
-    def forward(self, inputs):
+    def forward(self, inputs,return_context = False):
         """Placeholder of forward function."""
         pass
 
@@ -191,15 +191,17 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
         Returns:
             dict[str, Tensor]: a dictionary of loss components
         """
-        if return_context:
-            context = self.forward(inputs,return_context)
-            return context
-        else :
-            seg_logits = self.forward(inputs)
-            losses = self.losses(seg_logits, gt_semantic_seg, seg_weight)
-            return losses
 
-    def forward_test(self, inputs, img_metas, test_cfg,return_context = False):
+        seg_logits = self.forward(inputs,return_context = return_context)
+        if return_context:
+            losses = self.losses(seg_logits[0], gt_semantic_seg, seg_weight)
+            losses['context'] = seg_logits[1]
+        else:
+            losses = self.losses(seg_logits, gt_semantic_seg, seg_weight)
+        return losses
+
+
+    def forward_test(self, inputs, img_metas, test_cfg):
         """Forward function for testing.
 
         Args:
@@ -214,7 +216,7 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
         Returns:
             Tensor: Output segmentation map.
         """
-        return self.forward(inputs,return_context)
+        return self.forward(inputs)
 
     def cls_seg(self, feat):
         """Classify each pixel."""

@@ -181,6 +181,6 @@ class DAFormerHead(BaseDecodeHead):
         context = self.fuse_layer(torch.cat(list(_c.values()), dim=1))
         x = self.cls_seg(context)
         if return_context:
-            return context
+            return x,context
 
         return x
