@@ -85,7 +85,7 @@ class DACS(UDADecorator):
         # feature storage for contrastive
         self.feat_distributions = None
         self.ignore_index = 255
-        self.start_distribution_iter = 50
+        self.start_distribution_iter = 4000
         self.print_grad_magnitude = True
 
         #mit-b3 student model generate
