@@ -20,6 +20,7 @@ from matplotlib import pyplot as plt
 from timm.models.layers import DropPath
 from torch.nn.modules.dropout import _DropoutNd
 import torch.nn.functional as F
+from torch import nn
 
 from mmseg.core import add_prefix
 from mmseg.models import UDA, build_segmentor
@@ -86,7 +87,9 @@ class DACS(UDADecorator):
         self.feat_distributions = None
         self.ignore_index = 255
         self.start_distribution_iter = 4000
-        self.print_grad_magnitude = True
+        self.print_grad_magnitude = False
+
+
 
         #mit-b3 student model generate
         #std_cfg = deepcopy(cfg['model'])
@@ -242,6 +245,7 @@ class DACS(UDADecorator):
             'std': stds[0].unsqueeze(0)
         }
 
+
         # Train on source images
         clean_losses = self.get_model().forward_train(
             img, img_metas, gt_semantic_seg, return_feat=True)
@@ -280,8 +284,8 @@ class DACS(UDADecorator):
                 m.training = False
             if isinstance(m, DropPath):
                 m.training = False
-        with torch.no_grad():
-            ema_logits = self.get_teacher_model().encode_decode(target_img, target_img_metas)
+        #with torch.no_grad():
+        ema_logits = self.get_teacher_model().encode_decode(target_img, target_img_metas)
 
         ema_softmax = torch.softmax(ema_logits.detach(), dim=1)
         pseudo_prob, pseudo_label = torch.max(ema_softmax, dim=1)
@@ -319,9 +323,8 @@ class DACS(UDADecorator):
 
         # Train on mixed images
         mix_losses = self.get_model().forward_train(
-            mixed_img, img_metas, mixed_lbl, pseudo_weight, return_feat=True,return_context = True)
+            mixed_img, img_metas, mixed_lbl, pseudo_weight, return_feat=True,return_context = False)
         mix_losses.pop('features')
-        student_trg_feat = mix_losses.pop('decode.context')
         mix_losses = add_prefix(mix_losses, 'mix')
         mix_loss, mix_log_vars = self._parse_losses(mix_losses)
         log_vars.update(mix_log_vars)
@@ -346,19 +349,22 @@ class DACS(UDADecorator):
         #bank stroage
         bank = {}
 
-    #    augment_kl_loss = self.get_model().forward_train( target_img, target_img_metas, gt_semantic_seg, return_feat=True) # feature space
-    #    src_kl_feat = augment_kl_loss.pop('features') #encoder_decoder.py -> extract_feat(target_img)
         target_kl_feat = self.get_model().encode_decode( aug_target_img, target_img_metas)
-    #    student_src_feat = self.get_model().extract_feat(img)##output space
+
+        #for cl loss
+        pseudo_label_cl = pseudo_label.view(2, 1, 512, 512)
+        source_feat = self.get_model().forward_train(target_img, target_img_metas, pseudo_label_cl,return_feat=False, return_context=True)
+        student_trg_feat = source_feat.pop('decode.context')
 
 
-        with torch.no_grad(): #teacher
+        with torch.no_grad(): #
+            #for KL loss
             tea_target_feat = self.get_teacher_model().encode_decode(ori_target_img, target_img_metas)
-        #   tea_trg_feat = self.get_teacher_model().extract_decode_context(target_img,target_img_metas,return_context = True)
-            trg_losses = self.get_teacher_model().forward_train(mixed_img, img_metas, mixed_lbl, pseudo_weight, return_feat=True,return_context = True)#for cl loss
+
+            # for cl loss
+            trg_losses = self.get_teacher_model().forward_train(img, img_metas, gt_semantic_seg, return_feat=False,return_context = True)
             tea_trg_feat = trg_losses.pop('decode.context')
-        #     tea_src_feat = self.get_teacher_model().encode_decode(img, img_metas) #output space
-        #     tea_feat = self.get_teacher_model().extract_feat(target_img) #feature space
+
 
         #bank update : original target image - teacher network output
         pseudo_label_cl = pseudo_label.view(2,1,512,512) # variable change !!
